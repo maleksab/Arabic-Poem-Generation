@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 """Generate an Arabic poem with a local Ollama model."""
 
 import re
@@ -107,82 +106,28 @@ def generate_poem(theme, style="classical", num_verses=4,
             break
     return best or last
 
+
 if __name__ == "__main__":
     THEME = "الوطن"
     STYLE = "classical"
     VERSES = 4
-    TEMPLATE = "structured"
-    TEMPERATURES = [0.3, 0.7, 1.0]
-    RUNS = 2   # poems per temperature
+    TRIES = 2
 
     results = Path(__file__).resolve().parents[2] / "07_EXTRA" / "results"
     results.mkdir(parents=True, exist_ok=True)
 
-    with open(results / "temperature_test.txt", "w", encoding="utf-8") as f:
+    with open(results / "result.txt", "w", encoding="utf-8") as f:
         f.write(f"Theme: {THEME} | Style: {STYLE} | Verses: {VERSES} | "
-                f"Template: {TEMPLATE} | Model: llama3\n\n")
-        for temp in TEMPERATURES:
-            for run in range(1, RUNS + 1):
-                print(f"temperature {temp}, run {run} ...")
-                poem = generate_poem(THEME, STYLE, VERSES,
-                                     template=TEMPLATE, temperature=temp)
-                n_lines = len(poem.splitlines())
-                score = rhyme_consistency(poem)
-                f.write(f"=== temperature {temp} | run {run} | "
-                        f"lines {n_lines}/{VERSES} | "
-                        f"rhyme consistency {score:.2f} ===\n{poem}\n\n")
-                f.flush()
+                f"Meter: {DEFAULT_METER} | Tries: {TRIES} | "
+                f"Model: llama3 (Ollama default settings)\n\n")
+        for name in TEMPLATES:
+            print(f"Generating with template: {name} ...")
+            poem = generate_poem(THEME, STYLE, VERSES, template=name,
+                                 tries=TRIES)
+            n_lines = len(poem.splitlines())
+            score = rhyme_consistency(poem)
+            f.write(f"=== {name} | lines {n_lines}/{VERSES} | "
+                    f"rhyme consistency {score:.2f} ===\n{poem}\n\n")
+            f.flush()
 
-    print("Done: 07_EXTRA/results/temperature_test.txt")
-=======
-
-# ============================================
-# Project 9: Arabic Poem Generation
-# File: generate_poem.py
-# Task 2: Generate poems using Llama 3
-# ============================================
-
-import ollama
-from prompts import poem_prompt
-
-
-def generate_poem(theme, style, length):
-    """
-    Generate an Arabic poem using Llama 3.
-    """
-
-    # Create the prompt
-    prompt = poem_prompt(theme, style, length)
-
-    # Send the prompt to Llama 3
-    response = ollama.generate(
-        model="llama3",
-        prompt=prompt
-    )
-
-    # Extract the generated poem
-    poem = response["response"]
-
-    return poem
-
-
-# ============================================
-# Main program
-# ============================================
-
-if __name__ == "__main__":
-
-    print("=== Arabic Poem Generator ===")
-
-    # Get information from the user
-    theme = input("Enter the poem theme: ")
-    style = input("Enter the poem style: ")
-    length = input("Enter the number of verses: ")
-
-    # Generate the poem
-    result = generate_poem(theme, style, length)
-
-    # Display the result
-    print("\n=== Generated Poem ===\n")
-    print(result)
->>>>>>> 0463e9674beba051ba4a9fe226b874d88af05f5a
+    print("Done: 07_EXTRA/results/result.txt")
