@@ -103,8 +103,7 @@ DEFAULT_QAFIYA = (
     "word that ends with that same ending. Never write the ending as a "
     "separate word and never cut a word to make it fit"
 )
-DEFAULT_METERS = ["Al-Tawil", "Al-Basit", "Al-Kamil", "Al-Wafir",
-                  "Al-Ramal", "Al-Khafif"]
+DEFAULT_METERS = ["الطويل", "البسيط", "الكامل", "الوافر", "الرمل", "الخفيف"]
 DEFAULT_STYLES = ["classical", "modern", "dialectal"]
 DEFAULT_THEMES = ["الحب", "الوطن", "الأم", "الغربة", "الطبيعة",
                   "الصداقة", "الأمل"]
