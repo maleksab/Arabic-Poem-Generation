@@ -15,10 +15,11 @@ DIACRITICS = re.compile(r"[\u064B-\u0652\u0670\u0640]")
 
 
 def clean_poem(text, num_verses):
-    """Keep the first num_verses lines that contain Arabic letters.
+    """Return up to num_verses bayts, one per line, as 'half ... half'.
 
-    The model often ignores the requested length, adds blank lines or
-    English text, and leaves a dangling '...', so this is fixed here.
+    The model sometimes writes each hemistich on its own line instead of
+    putting both halves of a bayt on one line, so the layout is
+    normalized here. Blank lines, quotes and English text are removed.
     """
     lines = []
     for line in text.splitlines():
@@ -26,7 +27,14 @@ def clean_poem(text, num_verses):
         line = line.strip(".…").strip()
         if line and ARABIC_LETTER.search(line):
             lines.append(line)
-    return "\n".join(lines[:num_verses])
+
+    with_separator = [line for line in lines if "..." in line]
+    if len(with_separator) * 2 >= len(lines):
+        verses = lines                      # already one bayt per line
+    else:                                   # one hemistich per line: pair them
+        verses = [f"{lines[i]} ... {lines[i + 1]}"
+                  for i in range(0, len(lines) - 1, 2)]
+    return "\n".join(verses[:num_verses])
 
 
 def normalize(word):
@@ -39,26 +47,38 @@ def normalize(word):
     return word
 
 
-def last_letter(line):
-    """Last letter of the last word of a line (rhyme letter)."""
+def last_word(line):
+    """Normalized last word of a line (after the '...' separator)."""
     words = line.split("...")[-1].split()
-    if not words:
-        return ""
-    word = normalize(words[-1])
-    return word[-1] if word else ""
+    return normalize(words[-1]) if words else ""
+
+
+def last_letter(line):
+    """Rhyme letter: last letter of the last word, ignoring stray letters."""
+    word = last_word(line)
+    return word[-1] if len(word) >= 3 else ""
+
+
+def has_stray_endings(poem):
+    """True if a line ends with a single letter or a very short fragment."""
+    return any(len(last_word(line)) < 3 for line in poem.splitlines())
 
 
 def rhyme_consistency(poem):
     """Share of lines whose last word ends with the most common letter.
 
-    1.00 means all lines end with the same letter. It is a simple
-    approximation of rhyme (qafiya), not a full prosodic analysis.
+    Lines ending in a stray letter count as failures. 1.00 means every
+    line ends with a real-looking word with the same final letter. It is a
+    simple approximation of qafiya, not a full prosodic analysis.
     """
-    letters = [last_letter(line) for line in poem.splitlines()]
-    letters = [letter for letter in letters if letter]
-    if not letters:
+    lines = poem.splitlines()
+    if not lines:
         return 0.0
-    return Counter(letters).most_common(1)[0][1] / len(letters)
+    letters = [last_letter(line) for line in lines]
+    valid = [letter for letter in letters if letter]
+    if not valid:
+        return 0.0
+    return Counter(valid).most_common(1)[0][1] / len(lines)
 
 
 def has_foreign_characters(poem):
@@ -72,10 +92,10 @@ def generate_poem(theme, style="classical", num_verses=4,
                   tries=1, temperature=None, repeat_penalty=None):
     """Return a poem for the given settings.
 
-    With tries > 1, several poems are generated and the one with the best
-    rhyme consistency is kept; poems with foreign characters are skipped.
-    temperature and repeat_penalty are only sent when given, so by default
-    Ollama uses its own defaults (like `ollama run` in the terminal).
+    With tries > 1, several poems are generated and the best one is kept,
+    ranked by: right number of bayts, no foreign characters, no stray
+    endings, then rhyme consistency. temperature and repeat_penalty are only
+    sent when given, so by default Ollama uses its own defaults.
     """
     num_verses = int(num_verses)
     prompt = TEMPLATES[template].format(
@@ -88,7 +108,7 @@ def generate_poem(theme, style="classical", num_verses=4,
     if repeat_penalty is not None:
         options["repeat_penalty"] = repeat_penalty
 
-    best, best_score, last = "", -1.0, ""
+    best, best_key = "", None
     for _ in range(max(1, int(tries))):
         response = ollama.chat(
             model=model,
@@ -96,22 +116,23 @@ def generate_poem(theme, style="classical", num_verses=4,
             options=options,
         )
         poem = clean_poem(response["message"]["content"], num_verses)
-        last = poem
-        if has_foreign_characters(poem):
-            continue
+        count_ok = len(poem.splitlines()) == num_verses
+        clean = not has_foreign_characters(poem)
+        no_stray = not has_stray_endings(poem)
         score = rhyme_consistency(poem)
-        if score > best_score:
-            best, best_score = poem, score
-        if score == 1.0:
+        key = (count_ok, clean, no_stray, score)
+        if best_key is None or key > best_key:
+            best, best_key = poem, key
+        if count_ok and clean and no_stray and score == 1.0:
             break
-    return best or last
+    return best
 
 
 if __name__ == "__main__":
     THEME = "الوطن"
     STYLE = "classical"
     VERSES = 4
-    TRIES = 2
+    TRIES = 3
 
     results = Path(__file__).resolve().parents[2] / "07_EXTRA" / "results"
     results.mkdir(parents=True, exist_ok=True)
@@ -127,7 +148,10 @@ if __name__ == "__main__":
             n_lines = len(poem.splitlines())
             score = rhyme_consistency(poem)
             f.write(f"=== {name} | lines {n_lines}/{VERSES} | "
-                    f"rhyme consistency {score:.2f} ===\n{poem}\n\n")
+                    f"rhyme consistency {score:.2f} | "
+                    f"foreign: {has_foreign_characters(poem)} | "
+                    f"stray endings: {has_stray_endings(poem)} ===\n"
+                    f"{poem}\n\n")
             f.flush()
 
     print("Done: 07_EXTRA/results/result.txt")
